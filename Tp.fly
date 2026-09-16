@@ -1,0 +1,841 @@
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
+local SG = game:GetService("StarterGui")
+
+local player = Players.LocalPlayer
+
+local isMobile = UIS.TouchEnabled
+local isPC = UIS.KeyboardEnabled
+
+local FLY_SPEED = 50
+local PLATFORM_SIZE = Vector3.new(6, 0.5, 6)
+local PLATFORM_COLOR = Color3.fromRGB(0, 170, 255)
+local PLATFORM_OFFSET = 3.5
+
+local flying = false
+local ghost = nil
+local platform = nil
+local startPosition = nil
+local connection = nil
+local speed = FLY_SPEED
+
+local joyInput = Vector2.zero
+local vertInput = 0
+
+local mobileJoy = nil
+local mobileUpBtn = nil
+local mobileDownBtn = nil
+local editBtn = nil
+local mobileJoyThumb = nil
+
+local editMode = false
+
+local function getCam()
+	return workspace.CurrentCamera
+end
+
+local character, humanoid, rootPart
+
+local function refreshChar()
+	character = player.Character
+	if character then
+		humanoid = character:FindFirstChildOfClass("Humanoid")
+		rootPart = character:FindFirstChild("HumanoidRootPart")
+	end
+	return (character and humanoid and rootPart) and true or false
+end
+
+if not refreshChar() then
+	task.spawn(function()
+		player.CharacterAdded:Wait()
+		refreshChar()
+	end)
+end
+
+local parentGui
+pcall(function()
+	if gethui then
+		parentGui = gethui()
+	end
+end)
+parentGui = parentGui or player:WaitForChild("PlayerGui")
+
+local main = Instance.new("ScreenGui")
+main.Name = "flygui_" .. tostring(math.random(1, 999999))
+main.ResetOnSpawn = false
+main.IgnoreGuiInset = true
+main.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+main.DisplayOrder = 999
+main.Parent = parentGui
+
+local Frame = Instance.new("Frame")
+Frame.Name = "Frame"
+Frame.Parent = main
+Frame.BackgroundColor3 = Color3.fromRGB(163, 255, 137)
+Frame.BorderColor3 = Color3.fromRGB(103, 221, 213)
+Frame.Position = UDim2.new(0.1, 0, 0.38, 0)
+Frame.Size = UDim2.new(0, 190, 0, 57)
+Frame.Active = true
+Frame.Draggable = true
+Frame.ZIndex = 2
+
+local up = Instance.new("TextButton")
+up.Name = "up"
+up.Parent = Frame
+up.BackgroundColor3 = Color3.fromRGB(79, 255, 152)
+up.Size = UDim2.new(0, 44, 0, 28)
+up.Font = Enum.Font.SourceSans
+up.Text = "UP"
+up.TextColor3 = Color3.fromRGB(0, 0, 0)
+up.TextSize = 14
+up.ZIndex = 3
+
+local down = Instance.new("TextButton")
+down.Name = "down"
+down.Parent = Frame
+down.BackgroundColor3 = Color3.fromRGB(215, 255, 121)
+down.Position = UDim2.new(0, 0, 0.491228074, 0)
+down.Size = UDim2.new(0, 44, 0, 28)
+down.Font = Enum.Font.SourceSans
+down.Text = "DOWN"
+down.TextColor3 = Color3.fromRGB(0, 0, 0)
+down.TextSize = 14
+down.ZIndex = 3
+
+local onof = Instance.new("TextButton")
+onof.Name = "onof"
+onof.Parent = Frame
+onof.BackgroundColor3 = Color3.fromRGB(255, 249, 74)
+onof.Position = UDim2.new(0.702823281, 0, 0.491228074, 0)
+onof.Size = UDim2.new(0, 56, 0, 28)
+onof.Font = Enum.Font.SourceSans
+onof.Text = "fly"
+onof.TextColor3 = Color3.fromRGB(0, 0, 0)
+onof.TextSize = 14
+onof.AutoButtonColor = false
+onof.Active = true
+onof.Selectable = true
+onof.ZIndex = 5
+
+local TextLabel = Instance.new("TextLabel")
+TextLabel.Parent = Frame
+TextLabel.BackgroundColor3 = Color3.fromRGB(242, 60, 255)
+TextLabel.Position = UDim2.new(0.469327301, 0, 0, 0)
+TextLabel.Size = UDim2.new(0, 100, 0, 28)
+TextLabel.Font = Enum.Font.SourceSans
+TextLabel.Text = "FLY GUI V3"
+TextLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+TextLabel.TextScaled = true
+TextLabel.TextSize = 14
+TextLabel.TextWrapped = true
+TextLabel.ZIndex = 3
+
+local plus = Instance.new("TextButton")
+plus.Name = "plus"
+plus.Parent = Frame
+plus.BackgroundColor3 = Color3.fromRGB(133, 145, 255)
+plus.Position = UDim2.new(0.231578946, 0, 0, 0)
+plus.Size = UDim2.new(0, 45, 0, 28)
+plus.Font = Enum.Font.SourceSans
+plus.Text = "+"
+plus.TextColor3 = Color3.fromRGB(0, 0, 0)
+plus.TextScaled = true
+plus.ZIndex = 3
+
+local speedLabel = Instance.new("TextLabel")
+speedLabel.Name = "speed"
+speedLabel.Parent = Frame
+speedLabel.BackgroundColor3 = Color3.fromRGB(255, 85, 0)
+speedLabel.Position = UDim2.new(0.468421042, 0, 0.491228074, 0)
+speedLabel.Size = UDim2.new(0, 44, 0, 28)
+speedLabel.Font = Enum.Font.SourceSans
+speedLabel.Text = tostring(FLY_SPEED)
+speedLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+speedLabel.TextScaled = true
+speedLabel.ZIndex = 3
+
+local mine = Instance.new("TextButton")
+mine.Name = "mine"
+mine.Parent = Frame
+mine.BackgroundColor3 = Color3.fromRGB(123, 255, 247)
+mine.Position = UDim2.new(0.231578946, 0, 0.491228074, 0)
+mine.Size = UDim2.new(0, 45, 0, 29)
+mine.Font = Enum.Font.SourceSans
+mine.Text = "-"
+mine.TextColor3 = Color3.fromRGB(0, 0, 0)
+mine.TextScaled = true
+mine.ZIndex = 3
+
+local closebutton = Instance.new("TextButton")
+closebutton.Name = "Close"
+closebutton.Parent = Frame
+closebutton.BackgroundColor3 = Color3.fromRGB(225, 25, 0)
+closebutton.Font = Enum.Font.SourceSans
+closebutton.Size = UDim2.new(0, 45, 0, 28)
+closebutton.Text = "X"
+closebutton.TextSize = 30
+closebutton.Position = UDim2.new(0, 0, -1, 27)
+closebutton.ZIndex = 3
+
+local mini = Instance.new("TextButton")
+mini.Name = "minimize"
+mini.Parent = Frame
+mini.BackgroundColor3 = Color3.fromRGB(192, 150, 230)
+mini.Font = Enum.Font.SourceSans
+mini.Size = UDim2.new(0, 45, 0, 28)
+mini.Text = "-"
+mini.TextSize = 40
+mini.Position = UDim2.new(0, 44, -1, 27)
+mini.ZIndex = 3
+
+local mini2 = Instance.new("TextButton")
+mini2.Name = "minimize2"
+mini2.Parent = Frame
+mini2.BackgroundColor3 = Color3.fromRGB(192, 150, 230)
+mini2.Font = Enum.Font.SourceSans
+mini2.Size = UDim2.new(0, 45, 0, 28)
+mini2.Text = "+"
+mini2.TextSize = 40
+mini2.Position = UDim2.new(0, 44, -1, 57)
+mini2.Visible = false
+mini2.ZIndex = 3
+
+pcall(function()
+	SG:SetCore("SendNotification", {
+		Title = "FLY GUI V3";
+		Text = "BY XNEO (невидимый полёт)";
+		Duration = 5
+	})
+end)
+
+local function makeDraggable(element)
+	local dragging = false
+	local dragStart = nil
+	local startPos = nil
+
+	element.InputBegan:Connect(function(input)
+		if not editMode then return end
+		if input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			dragStart = input.Position
+			startPos = element.Position
+		end
+	end)
+
+	UIS.InputChanged:Connect(function(input)
+		if not editMode or not dragging then return end
+		if input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = input.Position - dragStart
+			element.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + delta.X,
+				startPos.Y.Scale, startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+
+	UIS.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+end
+
+local function makeDraggableButton(button, onClick)
+	local dragging = false
+	local dragStart = nil
+	local startPos = nil
+	local moved = false
+	local TAP_THRESHOLD = 8
+
+	button.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			moved = false
+			dragStart = input.Position
+			startPos = button.Position
+		end
+	end)
+
+	UIS.InputChanged:Connect(function(input)
+		if not dragging then return end
+		if input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = input.Position - dragStart
+			if delta.Magnitude > TAP_THRESHOLD then
+				moved = true
+			end
+			if moved then
+				button.Position = UDim2.new(
+					startPos.X.Scale, startPos.X.Offset + delta.X,
+					startPos.Y.Scale, startPos.Y.Offset + delta.Y
+				)
+			end
+		end
+	end)
+
+	UIS.InputEnded:Connect(function(input)
+		if not dragging then return end
+		if input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if not moved then
+				if onClick then onClick() end
+			end
+			dragging = false
+			moved = false
+		end
+	end)
+end
+
+if isMobile then
+	local joySize = 140
+	local thumbSize = 60
+
+	local joyBase = Instance.new("Frame")
+	joyBase.Name = "FlyJoystick"
+	joyBase.Size = UDim2.new(0, joySize, 0, joySize)
+	joyBase.Position = UDim2.new(0, 30, 1, -joySize - 170)
+	joyBase.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	joyBase.BackgroundTransparency = 0.75
+	joyBase.BorderSizePixel = 0
+	joyBase.Active = true
+	joyBase.ZIndex = 10
+	joyBase.Visible = false
+	joyBase.Parent = main
+	mobileJoy = joyBase
+
+	local joyCorner = Instance.new("UICorner")
+	joyCorner.CornerRadius = UDim.new(1, 0)
+	joyCorner.Parent = joyBase
+
+	local joyStroke = Instance.new("UIStroke")
+	joyStroke.Color = Color3.fromRGB(0, 170, 255)
+	joyStroke.Thickness = 2
+	joyStroke.Transparency = 0.3
+	joyStroke.Parent = joyBase
+
+	local joyThumb = Instance.new("Frame")
+	joyThumb.Size = UDim2.new(0, thumbSize, 0, thumbSize)
+	joyThumb.Position = UDim2.new(0.5, -thumbSize/2, 0.5, -thumbSize/2)
+	joyThumb.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+	joyThumb.BackgroundTransparency = 0.2
+	joyThumb.BorderSizePixel = 0
+	joyThumb.ZIndex = 11
+	joyThumb.Parent = joyBase
+	mobileJoyThumb = joyThumb
+
+	local thumbCorner = Instance.new("UICorner")
+	thumbCorner.CornerRadius = UDim.new(1, 0)
+	thumbCorner.Parent = joyThumb
+
+	local joystickTouch = nil
+	local maxDist = joySize / 2
+
+	local function updateJoy(inputPos)
+		local baseAbs = joyBase.AbsolutePosition
+		local baseSize = joyBase.AbsoluteSize
+		local center = Vector2.new(baseAbs.X + baseSize.X/2, baseAbs.Y + baseSize.Y/2)
+		local delta = Vector2.new(inputPos.X - center.X, inputPos.Y - center.Y)
+		if delta.Magnitude > maxDist then
+			delta = delta.Unit * maxDist
+		end
+		joyThumb.Position = UDim2.new(0.5, delta.X - thumbSize/2, 0.5, delta.Y - thumbSize/2)
+		joyInput = Vector2.new(delta.X / maxDist, delta.Y / maxDist)
+	end
+
+	local function resetJoy()
+		joystickTouch = nil
+		joyInput = Vector2.zero
+		joyThumb.Position = UDim2.new(0.5, -thumbSize/2, 0.5, -thumbSize/2)
+	end
+
+	joyBase.InputBegan:Connect(function(input)
+		if editMode then return end
+		if input.UserInputType == Enum.UserInputType.Touch then
+			joystickTouch = input
+			updateJoy(input.Position)
+		end
+	end)
+
+	UIS.InputChanged:Connect(function(input)
+		if editMode then return end
+		if joystickTouch and input == joystickTouch then
+			updateJoy(input.Position)
+		end
+	end)
+
+	UIS.InputEnded:Connect(function(input)
+		if joystickTouch and input == joystickTouch then
+			resetJoy()
+		end
+	end)
+
+	makeDraggable(joyBase)
+
+	local vBtnSize = 70
+
+	local upBtn = Instance.new("TextButton")
+	upBtn.Name = "FlyUpBtn"
+	upBtn.Size = UDim2.new(0, vBtnSize, 0, vBtnSize)
+	upBtn.Position = UDim2.new(1, -vBtnSize - 30, 1, -vBtnSize*2 - 160)
+	upBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+	upBtn.BackgroundTransparency = 0.25
+	upBtn.Text = "▲"
+	upBtn.TextSize = 30
+	upBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	upBtn.Font = Enum.Font.GothamBold
+	upBtn.AutoButtonColor = false
+	upBtn.ZIndex = 10
+	upBtn.Visible = false
+	upBtn.Parent = main
+	mobileUpBtn = upBtn
+
+	local upCorner = Instance.new("UICorner")
+	upCorner.CornerRadius = UDim.new(0.5, 0)
+	upCorner.Parent = upBtn
+
+	local downBtn = Instance.new("TextButton")
+	downBtn.Name = "FlyDownBtn"
+	downBtn.Size = UDim2.new(0, vBtnSize, 0, vBtnSize)
+	downBtn.Position = UDim2.new(1, -vBtnSize - 30, 1, -vBtnSize - 80)
+	downBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+	downBtn.BackgroundTransparency = 0.25
+	downBtn.Text = "▼"
+	downBtn.TextSize = 30
+	downBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	downBtn.Font = Enum.Font.GothamBold
+	downBtn.AutoButtonColor = false
+	downBtn.ZIndex = 10
+	downBtn.Visible = false
+	downBtn.Parent = main
+	mobileDownBtn = downBtn
+
+	local downCorner = Instance.new("UICorner")
+	downCorner.CornerRadius = UDim.new(0.5, 0)
+	downCorner.Parent = downBtn
+
+	upBtn.MouseButton1Down:Connect(function()
+		if editMode then return end
+		vertInput = 1
+		upBtn.BackgroundTransparency = 0.05
+	end)
+	upBtn.MouseButton1Up:Connect(function()
+		if vertInput == 1 then vertInput = 0 end
+		upBtn.BackgroundTransparency = 0.25
+	end)
+	upBtn.MouseLeave:Connect(function()
+		if vertInput == 1 then vertInput = 0 end
+		upBtn.BackgroundTransparency = 0.25
+	end)
+
+	downBtn.MouseButton1Down:Connect(function()
+		if editMode then return end
+		vertInput = -1
+		downBtn.BackgroundTransparency = 0.05
+	end)
+	downBtn.MouseButton1Up:Connect(function()
+		if vertInput == -1 then vertInput = 0 end
+		downBtn.BackgroundTransparency = 0.25
+	end)
+	downBtn.MouseLeave:Connect(function()
+		if vertInput == -1 then vertInput = 0 end
+		downBtn.BackgroundTransparency = 0.25
+	end)
+
+	makeDraggable(upBtn)
+	makeDraggable(downBtn)
+
+	editBtn = Instance.new("TextButton")
+	editBtn.Name = "EditPosBtn"
+	editBtn.Size = UDim2.new(0, 170, 0, 40)
+	editBtn.Position = UDim2.new(1, -180, 0, 100)
+	editBtn.BackgroundColor3 = Color3.fromRGB(150, 100, 220)
+	editBtn.Text = "✎ Изменить положение"
+	editBtn.TextSize = 14
+	editBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	editBtn.Font = Enum.Font.GothamBold
+	editBtn.AutoButtonColor = false
+	editBtn.ZIndex = 10
+	editBtn.Parent = main
+
+	local editCorner = Instance.new("UICorner")
+	editCorner.CornerRadius = UDim.new(0, 8)
+	editCorner.Parent = editBtn
+
+	local editStroke = Instance.new("UIStroke")
+	editStroke.Color = Color3.fromRGB(255, 255, 255)
+	editStroke.Thickness = 2
+	editStroke.Transparency = 0.5
+	editStroke.Parent = editBtn
+end
+
+local function setEditMode(state)
+	editMode = state
+
+	joyInput = Vector2.zero
+	vertInput = 0
+
+	if editMode then
+		if mobileJoy then mobileJoy.Visible = true end
+		if mobileUpBtn then mobileUpBtn.Visible = true end
+		if mobileDownBtn then mobileDownBtn.Visible = true end
+
+		if mobileJoy then
+			local stroke = mobileJoy:FindFirstChildOfClass("UIStroke")
+			if stroke then
+				stroke.Color = Color3.fromRGB(255, 200, 0)
+				stroke.Transparency = 0
+				stroke.Thickness = 4
+			end
+			mobileJoy.BackgroundTransparency = 0.6
+		end
+		if mobileUpBtn then mobileUpBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 0) end
+		if mobileDownBtn then mobileDownBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 0) end
+
+		if editBtn then
+			editBtn.Text = "✓ Готово"
+			editBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 60)
+		end
+	else
+		if not flying then
+			if mobileJoy then mobileJoy.Visible = false end
+			if mobileUpBtn then mobileUpBtn.Visible = false end
+			if mobileDownBtn then mobileDownBtn.Visible = false end
+		end
+
+		if mobileJoy then
+			local stroke = mobileJoy:FindFirstChildOfClass("UIStroke")
+			if stroke then
+				stroke.Color = Color3.fromRGB(0, 170, 255)
+				stroke.Transparency = 0.3
+				stroke.Thickness = 2
+			end
+			mobileJoy.BackgroundTransparency = 0.75
+		end
+		if mobileUpBtn then mobileUpBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255) end
+		if mobileDownBtn then mobileDownBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255) end
+
+		if editBtn then
+			editBtn.Text = "✎ Изменить положение"
+			editBtn.BackgroundColor3 = Color3.fromRGB(150, 100, 220)
+		end
+	end
+end
+
+if editBtn then
+	makeDraggableButton(editBtn, function()
+		setEditMode(not editMode)
+	end)
+end
+
+local function setCharacterVisible(state)
+	if not character then return end
+	for _, d in ipairs(character:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.LocalTransparencyModifier = state and 1 or 0
+		end
+	end
+end
+
+local function createGhost()
+	local oldArchivable = character.Archivable
+	character.Archivable = true
+	local clone = character:Clone()
+	character.Archivable = oldArchivable
+
+	if not clone then
+		return nil
+	end
+
+	clone.Name = "FlyGhost"
+
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then
+			d:Destroy()
+		elseif d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			d.Massless = true
+			d.LocalTransparencyModifier = 0
+		end
+	end
+
+	local ch = clone:FindFirstChildOfClass("Humanoid")
+	if ch then
+		ch.PlatformStand = true
+		ch.WalkSpeed = 0
+		ch.JumpPower = 0
+		ch.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	end
+
+	local hrp = clone:FindFirstChild("HumanoidRootPart")
+	if hrp then hrp.Transparency = 1 end
+
+	clone.Parent = workspace
+	return clone
+end
+
+local function createPlatform()
+	local p = Instance.new("Part")
+	p.Name = "FlyPlatform"
+	p.Size = PLATFORM_SIZE
+	p.Anchored = true
+	p.CanCollide = true
+	p.Material = Enum.Material.Neon
+	p.Color = PLATFORM_COLOR
+	p.Transparency = 0.3
+	p.Parent = workspace
+	return p
+end
+
+local function startFly()
+	if flying then return end
+	if not refreshChar() then return end
+	flying = true
+
+	startPosition = rootPart.Position
+
+	local ok, err = pcall(function()
+		ghost = createGhost()
+	end)
+
+	if not ok or not ghost then
+		flying = false
+		return
+	end
+
+	ghost:PivotTo(rootPart.CFrame)
+
+	setCharacterVisible(true)
+
+	rootPart.Anchored = true
+	humanoid.PlatformStand = true
+	humanoid.WalkSpeed = 0
+	humanoid.JumpPower = 0
+
+	local cam = getCam()
+	if cam then
+		local ghostHum = ghost:FindFirstChildOfClass("Humanoid")
+		if ghostHum then
+			cam.CameraSubject = ghostHum
+		end
+	end
+
+	platform = createPlatform()
+	platform.CFrame = CFrame.new(startPosition - Vector3.new(0, PLATFORM_OFFSET, 0))
+
+	connection = RS.RenderStepped:Connect(function(dt)
+		if not flying then return end
+		if character then
+			for _, d in ipairs(character:GetDescendants()) do
+				if d:IsA("BasePart") then
+					d.LocalTransparencyModifier = 1
+				end
+			end
+		end
+		if not ghost or not ghost.Parent then return end
+
+		local camNow = getCam()
+		if not camNow then return end
+
+		local moveDir = Vector3.zero
+		local camCF = camNow.CFrame
+
+		if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir += camCF.LookVector end
+		if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir -= camCF.LookVector end
+		if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir -= camCF.RightVector end
+		if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir += camCF.RightVector end
+		if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDir += Vector3.new(0, 1, 0) end
+		if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir -= Vector3.new(0, 1, 0) end
+
+		if isMobile and not editMode then
+			if joyInput.Magnitude > 0.1 then
+				local forward = -joyInput.Y
+				local right = joyInput.X
+				moveDir += camCF.LookVector * forward
+				moveDir += camCF.RightVector * right
+			end
+			if vertInput ~= 0 then
+				moveDir += Vector3.new(0, vertInput, 0)
+			end
+		end
+
+		local delta = Vector3.zero
+		if moveDir.Magnitude > 0 then
+			delta = moveDir.Unit * speed * dt
+		end
+		local newPivot = ghost:GetPivot() + delta
+		ghost:PivotTo(newPivot)
+
+		if platform then
+			platform.CFrame = CFrame.new(newPivot.Position - Vector3.new(0, PLATFORM_OFFSET, 0))
+		end
+	end)
+end
+
+local function stopFly()
+	if not flying then return end
+	flying = false
+
+	local endPosition
+	if ghost and ghost.Parent then
+		endPosition = ghost:GetPivot().Position
+	elseif rootPart then
+		endPosition = rootPart.Position
+	else
+		endPosition = Vector3.zero
+	end
+
+	if connection then connection:Disconnect(); connection = nil end
+	if ghost then ghost:Destroy(); ghost = nil end
+	if platform then platform:Destroy(); platform = nil end
+
+	setCharacterVisible(false)
+
+	if rootPart and humanoid then
+		rootPart.Anchored = false
+		rootPart.CFrame = CFrame.new(endPosition)
+		humanoid.PlatformStand = false
+		humanoid.WalkSpeed = 16
+		humanoid.JumpPower = 50
+		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+
+		local cam = getCam()
+		if cam then
+			cam.CameraSubject = humanoid
+		end
+	end
+
+	joyInput = Vector2.zero
+	vertInput = 0
+
+	startPosition = nil
+end
+
+local function updateFlyButton()
+	if flying then
+		onof.Text = "stop"
+		onof.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+		onof.TextColor3 = Color3.fromRGB(255, 255, 255)
+	else
+		onof.Text = "fly"
+		onof.BackgroundColor3 = Color3.fromRGB(255, 249, 74)
+		onof.TextColor3 = Color3.fromRGB(0, 0, 0)
+	end
+
+	if not editMode then
+		if mobileJoy then mobileJoy.Visible = flying end
+		if mobileUpBtn then mobileUpBtn.Visible = flying end
+		if mobileDownBtn then mobileDownBtn.Visible = flying end
+	end
+end
+
+updateFlyButton()
+
+local clickDebounce = false
+local function onFlyClick()
+	if clickDebounce then return end
+	clickDebounce = true
+	task.delay(0.25, function() clickDebounce = false end)
+
+	onof.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+
+	if flying then
+		pcall(stopFly)
+	else
+		pcall(startFly)
+	end
+
+	updateFlyButton()
+end
+
+onof.MouseButton1Down:Connect(onFlyClick)
+
+onof.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+	or input.UserInputType == Enum.UserInputType.Touch then
+		onFlyClick()
+	end
+end)
+
+up.MouseButton1Down:Connect(function()
+	while up.Parent and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+		task.wait(0.05)
+		if flying and ghost and ghost.Parent then
+			ghost:PivotTo(ghost:GetPivot() + Vector3.new(0, 1, 0))
+		elseif rootPart and rootPart.Parent then
+			rootPart.CFrame = rootPart.CFrame * CFrame.new(0, 1, 0)
+		end
+	end
+end)
+
+down.MouseButton1Down:Connect(function()
+	while down.Parent and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+		task.wait(0.05)
+		if flying and ghost and ghost.Parent then
+			ghost:PivotTo(ghost:GetPivot() + Vector3.new(0, -1, 0))
+		elseif rootPart and rootPart.Parent then
+			rootPart.CFrame = rootPart.CFrame * CFrame.new(0, -1, 0)
+		end
+	end
+end)
+
+plus.MouseButton1Down:Connect(function()
+	speed = speed + 5
+	speedLabel.Text = tostring(speed)
+end)
+
+mine.MouseButton1Down:Connect(function()
+	if speed <= 5 then
+		speedLabel.Text = "min 5"
+		task.wait(1)
+		speedLabel.Text = tostring(speed)
+	else
+		speed = speed - 5
+		speedLabel.Text = tostring(speed)
+	end
+end)
+
+closebutton.MouseButton1Click:Connect(function()
+	if flying then pcall(stopFly) end
+	main:Destroy()
+end)
+
+mini.MouseButton1Click:Connect(function()
+	up.Visible = false
+	down.Visible = false
+	onof.Visible = false
+	plus.Visible = false
+	speedLabel.Visible = false
+	mine.Visible = false
+	mini.Visible = false
+	mini2.Visible = true
+	Frame.BackgroundTransparency = 1
+	closebutton.Position = UDim2.new(0, 0, -1, 57)
+end)
+
+mini2.MouseButton1Click:Connect(function()
+	up.Visible = true
+	down.Visible = true
+	onof.Visible = true
+	plus.Visible = true
+	speedLabel.Visible = true
+	mine.Visible = true
+	mini.Visible = true
+	mini2.Visible = false
+	Frame.BackgroundTransparency = 0
+	closebutton.Position = UDim2.new(0, 0, -1, 27)
+end)
+
+player.CharacterAdded:Connect(function(newChar)
+	if flying then pcall(stopFly) end
+	task.wait(0.5)
+	refreshChar()
+	updateFlyButton()
+end)
